@@ -1,3 +1,4 @@
+import React, { useState } from 'react';
 import { Card } from './ui/card';
 import { Input } from './ui/input';
 import { Button } from './ui/button';
@@ -9,56 +10,62 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import {  useState } from 'react';
+import { Label } from './ui/label';
 import axios from 'axios';
 import useDepartments from '@/hooks/useDepartments';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-
 
 const EmployeeForm: React.FC = () => {
   const [name, setName] = useState<string>('');
   const [departmentId, setDepartmentId] = useState<string>('');
   const [address, setAddress] = useState<string>('');
+  const [pancardImage, setPancardImage] = useState<File | null>(null);
 
   const queryClient = useQueryClient();
-
-    const {data:departments, error} = useDepartments();
-    console.log("🚀 ~ departments:", departments)
-
+  const { data: departments, error } = useDepartments();
 
   const mutation = useMutation({
-    mutationFn: () => {
-      return axios.post('http://localhost:3000/api/employees', {
-        name,
-        department_id: parseInt(departmentId),
-        address,
+    mutationFn: async () => {
+      const formData = new FormData();
+      formData.append('name', name);
+      formData.append('department_id', departmentId);
+      formData.append('address', address);
+      if (pancardImage) {
+        formData.append('pancard_image', pancardImage);
+      }
+
+      return axios.post('http://localhost:3000/api/employees', formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
       });
     },
-
     onSettled(data, error) {
       if (data) {
         console.log('Employee added:', data);
         setName('');
         setDepartmentId('');
         setAddress('');
+        setPancardImage(null);
       }
       if (error) {
         console.error('Error adding employee:', error);
       }
       queryClient.invalidateQueries({ queryKey: ["employee"] });
-
     },
-
-
     onError() {
       console.error('Error adding employee');
     },
-
   });
-
 
   const addEmployee = async () => {
     mutation.mutate();    
+  };
+
+  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    if (event.target.files && event.target.files[0]) {
+      setPancardImage(event.target.files[0]);
+    }
   };
 
   return (
@@ -74,15 +81,11 @@ const EmployeeForm: React.FC = () => {
           <SelectValue placeholder="Select a department" />
         </SelectTrigger>
         <SelectContent>
-          {departments?.rows?.map((dept: { id: number; name: string;}) => {
-            console.log('akljfaklsdjf',dept)
-            return (
-                
-                    <SelectItem key={dept.id} value={dept.id.toString()}>
-                      {dept.name}
-                    </SelectItem>
-            )
-          })}
+          {departments?.rows?.map((dept: { id: number; name: string }) => (
+            <SelectItem key={dept.id} value={dept.id.toString()}>
+              {dept.name}
+            </SelectItem>
+          ))}
         </SelectContent>
       </Select>
       <Input 
@@ -90,6 +93,10 @@ const EmployeeForm: React.FC = () => {
         value={address} 
         onChange={(e) => setAddress(e.target.value)} 
       />
+      <div className="grid w-full max-w-sm items-center gap-1.5">
+        <Label htmlFor="picture">PAN Card Image</Label>
+        <Input id="picture" type="file" onChange={handleFileChange} />
+      </div>
       <Button onClick={addEmployee} disabled={mutation.isPending}>
         {mutation.isPending ? 'Adding...' : 'Add Employee'}
       </Button>
